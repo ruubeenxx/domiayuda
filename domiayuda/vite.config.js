@@ -1,0 +1,27 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
+
+export default defineConfig({
+  base: '/domiayuda/',
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: {
+        name: 'DomiAyuda',
+        short_name: 'DomiAyuda',
+        description: 'App de finanzas y domicilios',
+        theme_color: '#534AB7',
+        background_color: '#f5f5f7',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/domiayuda/',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      }
+    })
+  ]
+})
