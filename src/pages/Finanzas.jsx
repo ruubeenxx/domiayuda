@@ -30,7 +30,7 @@ function DonutChart({ data }) {
 }
 
 function Calendario() {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
   const hoy = new Date()
   const mes = hoy.getMonth(), anio = hoy.getFullYear(), dia = hoy.getDate()
   const primerDia = new Date(anio, mes, 1).getDay()
@@ -38,28 +38,50 @@ function Calendario() {
   const offset = primerDia === 0 ? 6 : primerDia - 1
   const dias = ['L','M','X','J','V','S','D']
 
+  const marcarDia = (d, estadoActual) => {
+    const key = `${anio}-${mes+1}-${d}`
+    // Ciclo: sin marcar → cumplí → no trabajé → sin marcar
+    let nuevo
+    if (estadoActual === undefined) nuevo = true
+    else if (estadoActual === true) nuevo = 'off'
+    else nuevo = undefined
+    dispatch({ type: 'SET_CAL_DIA', payload: { fecha: key, cumplido: nuevo } })
+  }
+
   return (
     <div className="card">
       <div className="card-title">Calendario del mes</div>
+      <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 8 }}>
+        Toca un día pasado para marcarlo
+      </div>
       <div className="cal-header">{dias.map(d => <div key={d}>{d}</div>)}</div>
       <div className="cal-grid">
         {Array(offset).fill(null).map((_, i) => <div key={'e'+i} className="cal-day" style={{ background: 'transparent' }} />)}
         {Array(diasMes).fill(null).map((_, i) => {
           const d = i + 1
           const key = `${anio}-${mes+1}-${d}`
+          const val = state.calendario[key]
           let cls = 'cal-day'
+          let style = {}
           if (d === dia) cls += ' today'
           else if (d < dia) {
-            const val = state.calendario[key]
             if (val === true) cls += ' good'
             else if (val === false) cls += ' bad'
-            else cls += Math.random() > 0.35 ? ' good' : ' bad'
+            else if (val === 'off') style = { background: '#f0f0f3', color: '#bbb' }
+            // sin marcar = gris neutro, clickeable
+            style.cursor = 'pointer'
           }
-          return <div key={d} className={cls}>{d}</div>
+          return (
+            <div key={d} className={cls} style={style}
+              onClick={() => d < dia && marcarDia(d, val)}
+              title={d < dia ? 'Toca para marcar' : ''}>
+              {val === 'off' && d < dia ? '—' : d}
+            </div>
+          )
         })}
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-        {[['#eaf3de','Meta cumplida'],['#fcebeb','No cumplida'],['#534AB7','Hoy']].map(([c,l]) => (
+        {[['#eaf3de','✅ Cumplí meta'],['#fcebeb','❌ No cumplí'],['#f0f0f3','— No trabajé'],['#534AB7','Hoy']].map(([c,l]) => (
           <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
             <div style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{l}
           </div>
@@ -70,7 +92,7 @@ function Calendario() {
 }
 
 export default function Finanzas() {
-  const { state, dispatch, ganado, gastadoHoy } = useApp()
+  const { state, dispatch, ganado, ganadoHoy, gastadoHoy, gastadoMesTotal } = useApp()
   const [showAddFijo, setShowAddFijo] = useState(false)
   const [fijoNombre, setFijoNombre] = useState('')
   const [fijoMonto, setFijoMonto] = useState('')
@@ -159,7 +181,10 @@ export default function Finanzas() {
 
       {/* Semana vs semana */}
       <div className="card">
-        <div className="card-title">Semana actual vs anterior</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div className="card-title" style={{ marginBottom: 0 }}>Semana actual vs anterior</div>
+          <button className="btn btn-ghost btn-sm" onClick={() => dispatch({ type: 'RESET_SEMANA' })}>Limpiar</button>
+        </div>
         <div className="week-compare">
           {diasSem.map((d, i) => {
             const h1 = Math.max(3, Math.round((state.semActual[i] / maxSem) * 44))
@@ -216,6 +241,51 @@ export default function Finanzas() {
             </div>
           ))
         }
+      </div>
+
+      {/* Informe mensual */}
+      <div className="card">
+        <div className="card-title">📊 Informe del mes — {new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Días trabajados</span>
+          <span style={{ fontWeight: 800, color: 'var(--purple)' }}>{diaActual} de {diasMes}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Total ganado</span>
+          <span style={{ fontWeight: 800, color: 'var(--green)' }}>{fmt(ganado)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Total gastado</span>
+          <span style={{ fontWeight: 800, color: 'var(--red)' }}>{fmt(gastadoMesTotal)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Gastos fijos mes</span>
+          <span style={{ fontWeight: 800, color: 'var(--red)' }}>{fmt(totalFijos)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Promedio diario</span>
+          <span style={{ fontWeight: 800, color: 'var(--purple)' }}>{fmt(diaActual > 0 ? ganado / diaActual : 0)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Proyección fin de mes</span>
+          <span style={{ fontWeight: 800, color: ritmo >= state.metaMensual ? 'var(--green)' : 'var(--amber)' }}>{fmt(ritmo)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f5f5f7' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Para ahorrar (40%)</span>
+          <span style={{ fontWeight: 800, color: 'var(--purple)' }}>{fmt(ganado * 0.4)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Neto disponible</span>
+          <span style={{ fontWeight: 800, color: disponible >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(Math.max(0, ganado - gastadoHoy - totalFijos))}</span>
+        </div>
+        <div className="divider" />
+        <div style={{ background: ritmo >= state.metaMensual ? 'var(--green-light)' : 'var(--amber-light)', borderRadius: 12, padding: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: ritmo >= state.metaMensual ? '#27500A' : '#633806' }}>
+            {ritmo >= state.metaMensual
+              ? `🎉 Vas a cumplir tu meta de ${fmt(state.metaMensual)}!`
+              : `⚡ Te faltan ${fmt(state.metaMensual - ganado)} para la meta — sigue!`}
+          </div>
+        </div>
       </div>
 
       <Calendario />

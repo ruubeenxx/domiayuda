@@ -20,17 +20,12 @@ const initialState = {
   gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
   historialGastos: [],
   // Semanas
-  semActual: [120000, 85000, 200000, 160000, 0, 0, 0],
-  semAnterior: [90000, 110000, 160000, 140000, 80000, 200000, 50000],
+  semActual: [0, 0, 0, 0, 0, 0, 0],
+  semAnterior: [0, 0, 0, 0, 0, 0, 0],
   // Metas de ahorro
-  metas: [
-    { id: 1, nombre: 'Moto nueva', icono: '🏍️', meta: 2500000, ahorrado: 350000 },
-    { id: 2, nombre: 'Celular', icono: '📱', meta: 800000, ahorrado: 180000 },
-  ],
+  metas: [],
   // Deudas
-  deudas: [
-    { id: 1, nombre: 'Crédito banco', total: 1200000, cuota: 120000 },
-  ],
+  deudas: [],
   // Moto
   moto: { km: 0, gastoMes: 0, ultimoAceite: null, llanta: null, rtm: null, mantenimientos: [] },
   // Calendario — días cumplidos (true/false) indexados por "YYYY-MM-DD"
@@ -44,14 +39,60 @@ function loadState() {
     const saved = localStorage.getItem('domiayuda_state')
     if (!saved) return initialState
     const parsed = JSON.parse(saved)
-    // Reset daily data if it's a new day
+
+    // Si es un día nuevo, guarda los totales del día anterior antes de resetear
     if (parsed.fechaHoy !== new Date().toDateString()) {
+      // Calcular totales del día que terminó
+      const ganadoAyer = parsed.movimientos.filter(m => m.monto > 0).reduce((a, m) => a + m.monto, 0)
+      const gastadoAyer = parsed.movimientos.filter(m => m.monto < 0).reduce((a, m) => a + Math.abs(m.monto), 0)
+      const domisAyer = parsed.movimientos.filter(m => m.tipo === 'ingreso').length
+
+      // Acumular al historial mensual
+      const historialMensual = parsed.historialMensual || []
+      historialMensual.push({
+        fecha: parsed.fechaHoy,
+        ganado: ganadoAyer,
+        gastado: gastadoAyer,
+        domis: domisAyer,
+      })
+
+      // Acumular gastos por categoria al mes
+      const gastosMes = parsed.gastosMes || { gas: 0, comida: 0, datos: 0, otros: 0 }
+      gastosMes.gas += parsed.gastosPorCategoria?.gas || 0
+      gastosMes.comida += parsed.gastosPorCategoria?.comida || 0
+      gastosMes.datos += parsed.gastosPorCategoria?.datos || 0
+      gastosMes.otros += parsed.gastosPorCategoria?.otros || 0
+
+      // Acumular ganado mensual
+      const ganadoMes = (parsed.ganadoMes || 0) + ganadoAyer
+      const gastadoMes = (parsed.gastadoMes || 0) + gastadoAyer
+
+      // Ver si hay domis pendientes
+      const metaDiaria = parsed.metaMensual / 30
+      const domisNecesariosAyer = Math.ceil(metaDiaria / parsed.precioDomi)
+      const pendientes = domisAyer < domisNecesariosAyer
+        ? (parsed.domisPendientes || 0) + (domisNecesariosAyer - domisAyer)
+        : Math.max(0, (parsed.domisPendientes || 0) - (domisAyer - domisNecesariosAyer))
+
+      // Mover semana actual a anterior si es lunes
+      const hoy = new Date()
+      const esLunes = hoy.getDay() === 1
+      const semAnterior = esLunes ? parsed.semActual : parsed.semAnterior
+      const semActual = esLunes ? [0,0,0,0,0,0,0] : parsed.semActual
+
       return {
         ...parsed,
         movimientos: [],
         fechaHoy: new Date().toDateString(),
         gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
         historialGastos: [],
+        historialMensual,
+        gastosMes,
+        ganadoMes,
+        gastadoMes,
+        domisPendientes: pendientes,
+        semActual,
+        semAnterior,
       }
     }
     return parsed
@@ -89,6 +130,25 @@ function reducer(state, action) {
       return { ...state, gastosFijos: [...state.gastosFijos, { ...action.payload, id: Date.now() }] }
     case 'REMOVE_GASTO_FIJO':
       return { ...state, gastosFijos: state.gastosFijos.filter(g => g.id !== action.payload) }
+    case 'DELETE_MOV': {
+      const mov = state.movimientos.find(m => m.id === action.payload)
+      if (!mov) return state
+      let newGastos = { ...state.gastosPorCategoria }
+      let newHistorial = state.historialGastos.filter(h => h.id !== action.payload)
+      if (mov.monto < 0) {
+        const abs = Math.abs(mov.monto)
+        const d = mov.desc.toLowerCase()
+        if (d.includes('gasolin') || d.includes('gas')) newGastos.gas = Math.max(0, newGastos.gas - abs)
+        else if (d.includes('comida') || d.includes('almuerzo') || d.includes('cena')) newGastos.comida = Math.max(0, newGastos.comida - abs)
+        else if (d.includes('dato') || d.includes('plan') || d.includes('celular')) newGastos.datos = Math.max(0, newGastos.datos - abs)
+        else newGastos.otros = Math.max(0, newGastos.otros - abs)
+      }
+      return { ...state, movimientos: state.movimientos.filter(m => m.id !== action.payload), gastosPorCategoria: newGastos, historialGastos: newHistorial }
+    }
+    case 'DELETE_META':
+      return { ...state, metas: state.metas.filter(m => m.id !== action.payload) }
+    case 'DELETE_DEUDA':
+      return { ...state, deudas: state.deudas.filter(d => d.id !== action.payload) }
     case 'ADD_META':
       return { ...state, metas: [...state.metas, { ...action.payload, id: Date.now() }] }
     case 'ABONAR_META': {
@@ -103,8 +163,16 @@ function reducer(state, action) {
       const mant = [...state.moto.mantenimientos, { ...action.payload, id: Date.now() }]
       return { ...state, moto: { ...state.moto, mantenimientos: mant, gastoMes: state.moto.gastoMes + (action.payload.costo || 0) } }
     }
-    case 'SET_CAL_DIA':
-      return { ...state, calendario: { ...state.calendario, [action.payload.fecha]: action.payload.cumplido } }
+    case 'UPDATE_CONFIG':
+      return { ...state, ...action.payload }
+    case 'SET_CAL_DIA': {
+      const newCal = { ...state.calendario }
+      if (action.payload.cumplido === undefined) delete newCal[action.payload.fecha]
+      else newCal[action.payload.fecha] = action.payload.cumplido
+      return { ...state, calendario: newCal }
+    }
+    case 'RESET_SEMANA':
+      return { ...state, semActual: [0,0,0,0,0,0,0], semAnterior: [0,0,0,0,0,0,0] }
     default:
       return state
   }
@@ -117,12 +185,19 @@ export function AppProvider({ children }) {
     localStorage.setItem('domiayuda_state', JSON.stringify(state))
   }, [state])
 
-  // Computed values
-  const ganado = state.movimientos.filter(m => m.monto > 0).reduce((a, m) => a + m.monto, 0)
+  // Totales del día actual
+  const ganadoHoy = state.movimientos.filter(m => m.monto > 0).reduce((a, m) => a + m.monto, 0)
   const gastadoHoy = state.movimientos.filter(m => m.monto < 0).reduce((a, m) => a + Math.abs(m.monto), 0)
   const propinas = state.movimientos.filter(m => m.tipo === 'propina').reduce((a, m) => a + m.monto, 0)
   const domisHoy = state.movimientos.filter(m => m.tipo === 'ingreso').length
-  const balance = ganado - gastadoHoy
+  const balance = ganadoHoy - gastadoHoy
+
+  // Totales del mes = acumulado + hoy
+  const ganadoMesTotal = (state.ganadoMes || 0) + ganadoHoy
+  const gastadoMesTotal = (state.gastadoMes || 0) + gastadoHoy
+
+  // Para la meta mensual usamos el total del mes
+  const ganado = ganadoMesTotal
 
   const hoy = new Date()
   const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
@@ -138,7 +213,8 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       state, dispatch,
-      ganado, gastadoHoy, propinas, domisHoy, balance,
+      ganado, ganadoHoy, gastadoHoy, propinas, domisHoy, balance,
+      ganadoMesTotal, gastadoMesTotal,
       diasRestantes, porDia, domisBase, domisNecesarios,
       totalGastosFijos,
     }}>

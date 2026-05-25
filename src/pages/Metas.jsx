@@ -41,14 +41,26 @@ export default function Metas() {
     <div>
       <div className="section-head">Metas de ahorro</div>
 
+      {state.metas.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 24, marginBottom: 12 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 600 }}>No tienes metas aún</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Agrega una para empezar a ahorrar</div>
+        </div>
+      )}
+
       {state.metas.map(m => {
         const pct = Math.min(100, (m.ahorrado / m.meta) * 100)
         const mesesFaltan = m.ahorrado < m.meta ? Math.ceil((m.meta - m.ahorrado) / 100000) : 0
         return (
-          <div className="meta-card card" key={m.id}>
+          <div className="card" key={m.id}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ fontSize: 14, fontWeight: 800 }}>{m.icono} {m.nombre}</div>
-              <span className={`tag ${pct >= 100 ? 'tag-green' : 'tag-purple'}`}>{pct >= 100 ? '✅ Lograda' : 'en curso'}</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span className={`tag ${pct >= 100 ? 'tag-green' : 'tag-purple'}`}>{pct >= 100 ? '✅ Lograda' : 'en curso'}</span>
+                <button onClick={() => dispatch({ type: 'DELETE_META', payload: m.id })}
+                  style={{ border: 'none', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, width: 26, height: 26, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>×</button>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 6 }}>
               <span>Progreso</span><span>{fmt(m.ahorrado)} / {fmt(m.meta)}</span>
@@ -72,38 +84,39 @@ export default function Metas() {
 
       <div className="section-head">Mis deudas</div>
 
+      {state.deudas.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 24, marginBottom: 12 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 600 }}>No tienes deudas registradas</div>
+        </div>
+      )}
+
       {state.deudas.map(d => {
         const meses = d.cuota > 0 ? Math.ceil(d.total / d.cuota) : '?'
         return (
           <div className="card" key={d.id} style={{ border: '1px solid #f5c4b3' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ fontSize: 14, fontWeight: 800 }}>💳 {d.nombre}</div>
-              <span className="tag tag-red">activa</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span className="tag tag-red">activa</span>
+                <button onClick={() => dispatch({ type: 'DELETE_DEUDA', payload: d.id })}
+                  style={{ border: 'none', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, width: 26, height: 26, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>×</button>
+              </div>
             </div>
-            <div className="list-item">
-              <div className="li-left">Total deuda</div>
-              <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: 13 }}>{fmt(d.total)}</span>
-            </div>
-            <div className="list-item">
-              <div className="li-left">Cuota mensual</div>
-              <span style={{ fontWeight: 700, fontSize: 13 }}>{fmt(d.cuota)}</span>
-            </div>
-            <div className="list-item">
-              <div className="li-left">Te liberas en</div>
-              <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13 }}>~{meses} meses</span>
-            </div>
+            <div className="list-item"><div className="li-left">Total deuda</div><span style={{ color: 'var(--red)', fontWeight: 700, fontSize: 13 }}>{fmt(d.total)}</span></div>
+            <div className="list-item"><div className="li-left">Cuota mensual</div><span style={{ fontWeight: 700, fontSize: 13 }}>{fmt(d.cuota)}</span></div>
+            <div className="list-item"><div className="li-left">Te liberas en</div><span style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13 }}>~{meses} meses</span></div>
           </div>
         )
       })}
 
-      <button className="btn btn-ghost btn-full" onClick={() => setShowDeuda(true)}>+ Agregar deuda</button>
+      <button className="btn btn-ghost btn-full" style={{ marginBottom: 20 }} onClick={() => setShowDeuda(true)}>+ Agregar deuda</button>
 
-      {/* Modal meta */}
       {showMeta && (
         <div className="modal-overlay" onClick={() => setShowMeta(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">Nueva meta de ahorro</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               {['🎯','🏍️','📱','✈️','🏠','💻','👟','🎮'].map(e => (
                 <button key={e} onClick={() => setMetaIcono(e)}
                   style={{ fontSize: 20, background: metaIcono === e ? 'var(--purple-light)' : 'transparent', border: '1px solid', borderColor: metaIcono === e ? 'var(--purple)' : 'transparent', borderRadius: 8, padding: 4, cursor: 'pointer' }}>
@@ -121,7 +134,6 @@ export default function Metas() {
         </div>
       )}
 
-      {/* Modal deuda */}
       {showDeuda && (
         <div className="modal-overlay" onClick={() => setShowDeuda(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -137,7 +149,6 @@ export default function Metas() {
         </div>
       )}
 
-      {/* Modal abonar */}
       {showAbonar && (
         <div className="modal-overlay" onClick={() => setShowAbonar(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
