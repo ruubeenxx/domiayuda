@@ -54,6 +54,7 @@ function loadState() {
         ganado: ganadoAyer,
         gastado: gastadoAyer,
         domis: domisAyer,
+        movimientos: parsed.movimientos || [],
       })
 
       // Acumular gastos por categoria al mes
