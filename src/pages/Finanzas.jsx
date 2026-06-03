@@ -290,6 +290,76 @@ export default function Finanzas() {
   const [diaDetalle, setDiaDetalle] = useState(null)
   const [showWrapped, setShowWrapped] = useState(false)
 
+  const generarPDF = () => {
+    const mes = new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+    const historial = state.historialMensual || []
+    const g = state.gastosMes || { gas: 0, comida: 0, datos: 0, otros: 0 }
+    const gastosTot = { gas: (g.gas||0)+(state.gastosPorCategoria?.gas||0), comida: (g.comida||0)+(state.gastosPorCategoria?.comida||0), datos: (g.datos||0)+(state.gastosPorCategoria?.datos||0), otros: (g.otros||0)+(state.gastosPorCategoria?.otros||0) }
+    const mejorDia = historial.length > 0 ? historial.reduce((a, b) => a.ganado > b.ganado ? a : b, historial[0]) : null
+    const diasTrabajados = historial.filter(d => d.domis > 0).length
+    const totalDomis = historial.reduce((a, d) => a + d.domis, 0)
+    const fmt2 = n => '$' + Math.round(n).toLocaleString('es-CO')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>DomiAyuda - Informe ${mes}</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1a1a2e; }
+      h1 { color: #534AB7; text-align: center; font-size: 24px; margin-bottom: 4px; }
+      .subtitle { text-align: center; color: #888; font-size: 13px; margin-bottom: 24px; text-transform: capitalize; }
+      .seccion { background: #f5f5f7; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+      .seccion h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; }
+      .fila { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #e8e8e8; font-size: 14px; }
+      .fila:last-child { border-bottom: none; }
+      .verde { color: #2ea86a; font-weight: 700; }
+      .rojo { color: #d94040; font-weight: 700; }
+      .morado { color: #534AB7; font-weight: 700; }
+      .destacado { background: #534AB7; color: white; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px; }
+      .destacado .num { font-size: 32px; font-weight: 800; }
+      .footer { text-align: center; color: #aaa; font-size: 11px; margin-top: 24px; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th { background: #534AB7; color: white; padding: 8px; text-align: left; }
+      td { padding: 7px 8px; border-bottom: 1px solid #eee; }
+      tr:nth-child(even) td { background: #fafafa; }
+    </style></head><body>
+    <h1>🛵 DomiAyuda</h1>
+    <div class="subtitle">Informe mensual — ${mes}</div>
+    <div class="destacado">
+      <div style="font-size:13px;opacity:.8;margin-bottom:4px">TOTAL GANADO EN EL MES</div>
+      <div class="num">${fmt2(ganado)}</div>
+      <div style="font-size:13px;opacity:.8;margin-top:4px">${totalDomis} domicilios en ${diasTrabajados} días trabajados</div>
+    </div>
+    <div class="seccion"><h2>Resumen general</h2>
+      <div class="fila"><span>Total ganado</span><span class="verde">${fmt2(ganado)}</span></div>
+      <div class="fila"><span>Total gastado</span><span class="rojo">${fmt2(gastadoMesTotal)}</span></div>
+      <div class="fila"><span>Gastos fijos (arriendo + moto)</span><span class="rojo">${fmt2(totalGastosFijos)}</span></div>
+      <div class="fila"><span>Promedio diario</span><span class="morado">${fmt2(diasTrabajados > 0 ? ganado/diasTrabajados : 0)}</span></div>
+      <div class="fila"><span>Total domicilios</span><span class="morado">${totalDomis}</span></div>
+      <div class="fila"><span>Días trabajados</span><span class="morado">${diasTrabajados}</span></div>
+      ${mejorDia ? `<div class="fila"><span>🏆 Mejor día</span><span class="verde">${fmt2(mejorDia.ganado)} — ${new Date(mejorDia.fecha).toLocaleDateString('es-CO',{day:'numeric',month:'long'})}</span></div>` : ''}
+      <div class="fila"><span>Para ahorrar (40%)</span><span class="morado">${fmt2(ganado*0.4)}</span></div>
+      <div class="fila"><span>Neto disponible</span><span class="${ganado-gastadoMesTotal-totalGastosFijos>=0?'verde':'rojo'}">${fmt2(Math.max(0,ganado-gastadoMesTotal-totalGastosFijos))}</span></div>
+    </div>
+    <div class="seccion"><h2>En qué gasté mi plata</h2>
+      <div class="fila"><span>⛽ Gasolina</span><span class="rojo">${fmt2(gastosTot.gas)}</span></div>
+      <div class="fila"><span>🍽️ Comida</span><span class="rojo">${fmt2(gastosTot.comida)}</span></div>
+      <div class="fila"><span>📱 Datos/Plan</span><span class="rojo">${fmt2(gastosTot.datos)}</span></div>
+      <div class="fila"><span>🔧 Otros</span><span class="rojo">${fmt2(gastosTot.otros)}</span></div>
+    </div>
+    ${historial.length > 0 ? `<div class="seccion"><h2>Historial por día</h2>
+    <table><thead><tr><th>Fecha</th><th>Domis</th><th>Ganado</th><th>Gastado</th></tr></thead><tbody>
+    ${historial.map(d => `<tr><td>${new Date(d.fecha).toLocaleDateString('es-CO',{day:'numeric',month:'short'})}</td><td>${d.domis}</td><td style="color:#2ea86a;font-weight:600">${fmt2(d.ganado)}</td><td style="color:#d94040;font-weight:600">${fmt2(d.gastado)}</td></tr>`).join('')}
+    </tbody></table></div>` : ''}
+    <div class="footer">Generado por DomiAyuda • ${new Date().toLocaleDateString('es-CO')}</div>
+    </body></html>`
+
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `DomiAyuda-Informe-${mes.replace(' ','_')}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const g = state.gastosPorCategoria
   const gMes = state.gastosMes || { gas: 0, comida: 0, datos: 0, otros: 0 }
   // Sumar gastos de hoy + acumulado del mes
@@ -329,9 +399,10 @@ export default function Finanzas() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div className="section-head" style={{ marginBottom: 0 }}>Mis finanzas</div>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowWrapped(true)}>
-          🎉 Ver mes
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-ghost btn-sm" onClick={generarPDF}>📄 PDF</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowWrapped(true)}>🎉 Ver mes</button>
+        </div>
       </div>
 
       {/* Banner último día */}

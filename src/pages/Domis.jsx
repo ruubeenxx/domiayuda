@@ -188,6 +188,14 @@ export default function Domis() {
         )}
       </div>
 
+      {/* Botón rápido */}
+      <button
+        style={{ width: '100%', padding: '18px 0', background: 'var(--green)', border: 'none', borderRadius: 16, color: '#fff', fontSize: 17, fontWeight: 800, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, letterSpacing: .3 }}
+        onClick={() => dispatch({ type: 'ADD_MOV', payload: { desc: `Domi #${domisHoy + 1}`, monto: state.precioDomi, tipo: 'ingreso' } })}
+      >
+        <span style={{ fontSize: 24 }}>⚡</span> Domi rápido — {fmt(state.precioDomi)}
+      </button>
+
       {/* Registrar */}
       <div className="card">
         <div className="card-title">Registrar movimiento</div>

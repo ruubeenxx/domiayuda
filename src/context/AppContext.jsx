@@ -15,7 +15,7 @@ const initialState = {
   // Domis del día
   movimientos: [],
   domisPendientes: 0,
-  racha: 3,
+  racha: 0,
   // Finanzas acumuladas
   gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
   historialGastos: [],
@@ -40,15 +40,24 @@ function loadState() {
     if (!saved) return initialState
     const parsed = JSON.parse(saved)
 
-    // Si es un día nuevo, guarda los totales del día anterior antes de resetear
-    if (parsed.fechaHoy !== new Date().toDateString()) {
+    const ahora = new Date()
+    const mesActual = ahora.getMonth()
+    const anioActual = ahora.getFullYear()
+    const fechaGuardada = new Date(parsed.fechaHoy || ahora.toDateString())
+    const mesGuardado = fechaGuardada.getMonth()
+    const anioGuardado = fechaGuardada.getFullYear()
+
+    const esDiaNuevo = parsed.fechaHoy !== ahora.toDateString()
+    const esMesNuevo = mesActual !== mesGuardado || anioActual !== anioGuardado
+
+    if (esDiaNuevo) {
       // Calcular totales del día que terminó
       const ganadoAyer = parsed.movimientos.filter(m => m.monto > 0).reduce((a, m) => a + m.monto, 0)
       const gastadoAyer = parsed.movimientos.filter(m => m.monto < 0).reduce((a, m) => a + Math.abs(m.monto), 0)
       const domisAyer = parsed.movimientos.filter(m => m.tipo === 'ingreso').length
 
       // Acumular al historial mensual
-      const historialMensual = parsed.historialMensual || []
+      let historialMensual = parsed.historialMensual || []
       historialMensual.push({
         fecha: parsed.fechaHoy,
         ganado: ganadoAyer,
@@ -57,34 +66,72 @@ function loadState() {
         movimientos: parsed.movimientos || [],
       })
 
-      // Acumular gastos por categoria al mes
+      // Gastos por categoría acumulados
       const gastosMes = parsed.gastosMes || { gas: 0, comida: 0, datos: 0, otros: 0 }
       gastosMes.gas += parsed.gastosPorCategoria?.gas || 0
       gastosMes.comida += parsed.gastosPorCategoria?.comida || 0
       gastosMes.datos += parsed.gastosPorCategoria?.datos || 0
       gastosMes.otros += parsed.gastosPorCategoria?.otros || 0
 
-      // Acumular ganado mensual
       const ganadoMes = (parsed.ganadoMes || 0) + ganadoAyer
       const gastadoMes = (parsed.gastadoMes || 0) + gastadoAyer
 
-      // Ver si hay domis pendientes
+      // Domis pendientes
       const metaDiaria = parsed.metaMensual / 30
       const domisNecesariosAyer = Math.ceil(metaDiaria / parsed.precioDomi)
       const pendientes = domisAyer < domisNecesariosAyer
         ? (parsed.domisPendientes || 0) + (domisNecesariosAyer - domisAyer)
         : Math.max(0, (parsed.domisPendientes || 0) - (domisAyer - domisNecesariosAyer))
 
-      // Mover semana actual a anterior si es lunes
-      const hoy = new Date()
-      const esLunes = hoy.getDay() === 1
-      const semAnterior = esLunes ? parsed.semActual : parsed.semAnterior
-      const semActual = esLunes ? [0,0,0,0,0,0,0] : parsed.semActual
+      // Racha real — cumplió la meta diaria ayer?
+      const cumpliAyer = ganadoAyer >= metaDiaria
+      const nuevaRacha = cumpliAyer ? (parsed.racha || 0) + 1 : 0
+
+      // Semana
+      const esLunes = ahora.getDay() === 1
+      const semAnterior = esLunes ? [...parsed.semActual] : [...(parsed.semAnterior || [0,0,0,0,0,0,0])]
+      const semActual = esLunes ? [0,0,0,0,0,0,0] : [...(parsed.semActual || [0,0,0,0,0,0,0])]
+
+      // Si es mes nuevo — archivar el mes anterior y resetear todo
+      if (esMesNuevo) {
+        const nombreMes = fechaGuardada.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+        const archivoPrevio = parsed.archiveMeses || []
+        archivoPrevio.push({
+          mes: nombreMes,
+          mesNum: mesGuardado,
+          anio: anioGuardado,
+          ganadoTotal: ganadoMes,
+          gastadoTotal: gastadoMes,
+          gastosMes,
+          historialMensual,
+          totalDomis: historialMensual.reduce((a, d) => a + d.domis, 0),
+          diasTrabajados: historialMensual.filter(d => d.domis > 0).length,
+          mejorDia: historialMensual.length > 0 ? historialMensual.reduce((a, b) => a.ganado > b.ganado ? a : b) : null,
+        })
+
+        return {
+          ...parsed,
+          movimientos: [],
+          fechaHoy: ahora.toDateString(),
+          gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
+          historialGastos: [],
+          historialMensual: [],
+          gastosMes: { gas: 0, comida: 0, datos: 0, otros: 0 },
+          ganadoMes: 0,
+          gastadoMes: 0,
+          domisPendientes: 0, // Reset pendientes al nuevo mes
+          semActual: [0,0,0,0,0,0,0],
+          semAnterior: [0,0,0,0,0,0,0],
+          calendario: {},
+          archiveMeses: archivoPrevio,
+          moto: { ...parsed.moto, gastoMes: 0 },
+        }
+      }
 
       return {
         ...parsed,
         movimientos: [],
-        fechaHoy: new Date().toDateString(),
+        fechaHoy: ahora.toDateString(),
         gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
         historialGastos: [],
         historialMensual,
@@ -92,10 +139,12 @@ function loadState() {
         ganadoMes,
         gastadoMes,
         domisPendientes: pendientes,
+        racha: nuevaRacha,
         semActual,
         semAnterior,
       }
     }
+
     return parsed
   } catch {
     return initialState
@@ -172,6 +221,31 @@ function reducer(state, action) {
       else newCal[action.payload.fecha] = action.payload.cumplido
       return { ...state, calendario: newCal }
     }
+    case 'PAGAR_CUOTA': {
+      const deudas = state.deudas.map(d => {
+        if (d.id !== action.payload) return d
+        const nuevasPagadas = (d.cuotasPagadas || 0) + 1
+        return { ...d, cuotasPagadas: nuevasPagadas }
+      })
+      return { ...state, deudas }
+    }
+    case 'RESET_MES':
+      return {
+        ...state,
+        movimientos: [],
+        fechaHoy: new Date().toDateString(),
+        gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
+        historialGastos: [],
+        historialMensual: [],
+        gastosMes: { gas: 0, comida: 0, datos: 0, otros: 0 },
+        ganadoMes: 0,
+        gastadoMes: 0,
+        domisPendientes: 0,
+        semActual: [0,0,0,0,0,0,0],
+        semAnterior: [0,0,0,0,0,0,0],
+        calendario: {},
+        moto: { ...state.moto, gastoMes: 0 },
+      }
     case 'RESET_SEMANA':
       return { ...state, semActual: [0,0,0,0,0,0,0], semAnterior: [0,0,0,0,0,0,0] }
     default:
