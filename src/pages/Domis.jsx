@@ -282,7 +282,12 @@ export default function Domis() {
           capitalInicial={state.capitalInicial}
           gastosFijos={state.gastosFijos}
           gastadoHoy={gastadoHoy}
-          onClose={() => setShowResumen(false)}
+          onClose={() => {
+            // Al cerrar el día, actualizar el capital al valor actual en mano
+            const capitalNuevo = state.capitalInicial + balance
+            dispatch({ type: 'UPDATE_CONFIG', payload: { capitalInicial: capitalNuevo } })
+            setShowResumen(false)
+          }}
         />
       )}
     </div>
