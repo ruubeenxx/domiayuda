@@ -15,7 +15,7 @@ const initialState = {
   // Domis del día
   movimientos: [],
   domisPendientes: 0,
-  racha: 0,
+  racha: 3,
   // Finanzas acumuladas
   gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
   historialGastos: [],
@@ -83,10 +83,6 @@ function loadState() {
         ? (parsed.domisPendientes || 0) + (domisNecesariosAyer - domisAyer)
         : Math.max(0, (parsed.domisPendientes || 0) - (domisAyer - domisNecesariosAyer))
 
-      // Racha real — cumplió la meta diaria ayer?
-      const cumpliAyer = ganadoAyer >= metaDiaria
-      const nuevaRacha = cumpliAyer ? (parsed.racha || 0) + 1 : 0
-
       // Semana
       const esLunes = ahora.getDay() === 1
       const semAnterior = esLunes ? [...parsed.semActual] : [...(parsed.semAnterior || [0,0,0,0,0,0,0])]
@@ -113,17 +109,19 @@ function loadState() {
           ...parsed,
           movimientos: [],
           fechaHoy: ahora.toDateString(),
+          fechaInicioMes: ahora.toDateString(),
           gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
           historialGastos: [],
           historialMensual: [],
           gastosMes: { gas: 0, comida: 0, datos: 0, otros: 0 },
           ganadoMes: 0,
           gastadoMes: 0,
-          domisPendientes: 0, // Reset pendientes al nuevo mes
+          domisPendientes: 0,
           semActual: [0,0,0,0,0,0,0],
           semAnterior: [0,0,0,0,0,0,0],
           calendario: {},
           archiveMeses: archivoPrevio,
+          gastosFijosApartado: 0,
           moto: { ...parsed.moto, gastoMes: 0 },
         }
       }
@@ -139,7 +137,6 @@ function loadState() {
         ganadoMes,
         gastadoMes,
         domisPendientes: pendientes,
-        racha: nuevaRacha,
         semActual,
         semAnterior,
       }
@@ -221,6 +218,10 @@ function reducer(state, action) {
       else newCal[action.payload.fecha] = action.payload.cumplido
       return { ...state, calendario: newCal }
     }
+    case 'EDITAR_DEUDA':
+      return { ...state, deudas: state.deudas.map(d => d.id === action.payload.id ? { ...d, ...action.payload } : d) }
+    case 'EDITAR_CUOTAS_PAGADAS':
+      return { ...state, deudas: state.deudas.map(d => d.id === action.payload.id ? { ...d, cuotasPagadas: action.payload.cuotasPagadas } : d) }
     case 'PAGAR_CUOTA': {
       const deudas = state.deudas.map(d => {
         if (d.id !== action.payload) return d
@@ -234,6 +235,7 @@ function reducer(state, action) {
         ...state,
         movimientos: [],
         fechaHoy: new Date().toDateString(),
+        fechaInicioMes: new Date().toDateString(),
         gastosPorCategoria: { gas: 0, comida: 0, datos: 0, otros: 0 },
         historialGastos: [],
         historialMensual: [],
@@ -244,6 +246,7 @@ function reducer(state, action) {
         semActual: [0,0,0,0,0,0,0],
         semAnterior: [0,0,0,0,0,0,0],
         calendario: {},
+        gastosFijosApartado: 0,
         moto: { ...state.moto, gastoMes: 0 },
       }
     case 'RESET_SEMANA':
@@ -270,14 +273,19 @@ export function AppProvider({ children }) {
   // Totales del mes = acumulado + hoy
   const ganadoMesTotal = (state.ganadoMes || 0) + ganadoHoy
   const gastadoMesTotal = (state.gastadoMes || 0) + gastadoHoy
-
-  // Para la meta mensual usamos el total del mes
   const ganado = ganadoMesTotal
 
   const hoy = new Date()
-  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
-  const diaActual = hoy.getDate()
-  const diasRestantes = diasMes - diaActual + 1
+
+  // Usar fecha de inicio del mes (reset o día 1)
+  const fechaInicioMes = state.fechaInicioMes ? new Date(state.fechaInicioMes) : new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+  const fechaFinMes = new Date(fechaInicioMes)
+  fechaFinMes.setMonth(fechaFinMes.getMonth() + 1)
+  fechaFinMes.setDate(fechaFinMes.getDate() - 1)
+
+  const diasTotalesPeriodo = Math.round((fechaFinMes - fechaInicioMes) / (1000 * 60 * 60 * 24)) + 1
+  const diasRestantes = Math.max(1, Math.round((fechaFinMes - hoy) / (1000 * 60 * 60 * 24)) + 1)
+
   const faltaMensual = Math.max(0, state.metaMensual - ganado)
   const porDia = diasRestantes > 0 ? Math.ceil(faltaMensual / diasRestantes) : 0
   const domisBase = Math.ceil(porDia / state.precioDomi)

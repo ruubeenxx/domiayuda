@@ -3,17 +3,27 @@ import { useApp } from '../context/AppContext.jsx'
 
 function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CO') }
 
-function ResumenDia({ ganado, balance, capitalInicial, gastosFijos, gastadoHoy, onClose }) {
+function ResumenDia({ ganadoHoy, balance, capitalInicial, gastosFijos, gastadoHoy, deudas, onClose }) {
   const totalFijosMes = gastosFijos.reduce((a, g) => a + g.monto, 0)
-  // Proporción diaria de gastos fijos según lo que ganó hoy
-  // Si ganó más, aparta más. Si ganó menos, aparta menos. Proporcional a meta diaria
   const metaDiaria = 2000000 / 30
-  const proporcion = ganado > 0 ? Math.min(1, ganado / metaDiaria) : 0
+  const proporcion = ganadoHoy > 0 ? Math.min(1, ganadoHoy / metaDiaria) : 0
   const paraFijosHoy = Math.round((totalFijosMes / 30) * proporcion)
-  const ahorrarHoy = Math.round(ganado * 0.40)
-  const libreHoy = Math.round(ganado * 0.25)
-  const gastosDia = gastadoHoy // gasolina, comida, etc ya descontados
+  const ahorrarHoy = Math.round(ganadoHoy * 0.40)
+  const libreHoy = Math.round(ganadoHoy * 0.25)
   const capitalFinal = capitalInicial + balance
+
+  // Punto 8: deudas que toca pagar hoy
+  const hoy = new Date()
+  const nombreDiaHoy = hoy.toLocaleDateString('es-CO', { weekday: 'long' }).split(',')[0]
+  const diaCapital = nombreDiaHoy.charAt(0).toUpperCase() + nombreDiaHoy.slice(1)
+  const deudasHoy = (deudas || []).filter(d => {
+    if (d.frecuencia === 'diaria') return true
+    if (d.frecuencia === 'semanal' && d.diaPago === diaCapital) return true
+    if (d.frecuencia === 'quincenal' && (hoy.getDate() === 1 || hoy.getDate() === 15)) return true
+    if (d.frecuencia === 'mensual' && hoy.getDate() === parseInt(d.diaPago)) return true
+    return false
+  })
+  const totalDeudasHoy = deudasHoy.reduce((a, d) => a + d.cuota, 0)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -21,23 +31,29 @@ function ResumenDia({ ganado, balance, capitalInicial, gastosFijos, gastadoHoy, 
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 32, marginBottom: 4 }}>🏁</div>
           <div style={{ fontSize: 16, fontWeight: 800 }}>Cierre del día</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginTop: 2 }}>Así quedó tu día</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginTop: 2 }}>Así quedó tu día de hoy</div>
         </div>
 
-        {/* Resumen capital */}
+        {/* Resumen capital — solo hoy */}
         <div style={{ background: 'var(--purple-light)', borderRadius: 14, padding: 13, marginBottom: 14, border: '1px solid var(--purple-mid)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Saliste con</span>
             <span style={{ fontWeight: 700, color: 'var(--text)' }}>{fmt(capitalInicial)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Ganaste en domis</span>
-            <span style={{ fontWeight: 700, color: 'var(--green)' }}>+{fmt(ganado)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Ganaste HOY en domis</span>
+            <span style={{ fontWeight: 700, color: 'var(--green)' }}>+{fmt(ganadoHoy)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Gastaste (gas, comida...)</span>
-            <span style={{ fontWeight: 700, color: 'var(--red)' }}>-{fmt(gastosDia)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Gastaste HOY (gas, comida...)</span>
+            <span style={{ fontWeight: 700, color: 'var(--red)' }}>-{fmt(gastadoHoy)}</span>
           </div>
+          {totalDeudasHoy > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Pagos de deudas hoy</span>
+              <span style={{ fontWeight: 700, color: 'var(--red)' }}>-{fmt(totalDeudasHoy)}</span>
+            </div>
+          )}
           <div className="divider" />
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 14, fontWeight: 800 }}>Capital en mano ahora</span>
@@ -45,47 +61,52 @@ function ResumenDia({ ganado, balance, capitalInicial, gastosFijos, gastadoHoy, 
           </div>
         </div>
 
-        {/* Qué hacer con la plata */}
+        {/* Deudas de hoy */}
+        {deudasHoy.length > 0 && (
+          <div style={{ background: 'var(--amber-light)', borderRadius: 13, padding: '11px 14px', marginBottom: 12, border: '1px solid #FAC775' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#633806', marginBottom: 6 }}>⚠️ Deudas que toca pagar hoy</div>
+            {deudasHoy.map(d => (
+              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 3 }}>
+                <span>💳 {d.nombre}</span>
+                <span style={{ color: 'var(--red)', fontWeight: 700 }}>{fmt(d.cuota)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Qué hacer con la plata — solo con lo de hoy */}
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>
           De tus {fmt(capitalFinal)} en mano, haz esto:
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-
-          {/* Gastos fijos proporcionales */}
           <div style={{ background: '#eaf3de', borderRadius: 13, padding: '12px 14px', border: '1px solid #C0DD97' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 800 }}>🏠 Guarda para gastos fijos</div>
                 <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginTop: 2 }}>
-                  Arriendo + moto = {fmt(totalFijosMes)}/mes
-                </div>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>
-                  Según lo que ganaste hoy ({Math.round(proporcion*100)}% de un día normal)
+                  Arriendo + moto = {fmt(totalFijosMes)}/mes · parte proporcional de hoy
                 </div>
               </div>
               <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--green)', marginLeft: 10 }}>{fmt(paraFijosHoy)}</span>
             </div>
           </div>
 
-          {/* Ahorro */}
           <div style={{ background: 'var(--purple-light)', borderRadius: 13, padding: '12px 14px', border: '1px solid var(--purple-mid)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 800 }}>🐷 Ahorra</div>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginTop: 2 }}>40% de lo que ganaste</div>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>Para tus metas de ahorro</div>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginTop: 2 }}>40% de lo que ganaste hoy ({fmt(ganadoHoy)})</div>
               </div>
               <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--purple)', marginLeft: 10 }}>{fmt(ahorrarHoy)}</span>
             </div>
           </div>
 
-          {/* Libre */}
           <div style={{ background: 'var(--amber-light)', borderRadius: 13, padding: '12px 14px', border: '1px solid #FAC775' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 800 }}>👛 Libre para ti</div>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginTop: 2 }}>25% — gastar en lo que quieras</div>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginTop: 2 }}>25% de lo de hoy — gastar en lo que quieras</div>
               </div>
               <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--amber)', marginLeft: 10 }}>{fmt(libreHoy)}</span>
             </div>
@@ -188,9 +209,9 @@ export default function Domis() {
         )}
       </div>
 
-      {/* Botón rápido */}
+      {/* Botón domi rápido */}
       <button
-        style={{ width: '100%', padding: '18px 0', background: 'var(--green)', border: 'none', borderRadius: 16, color: '#fff', fontSize: 17, fontWeight: 800, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, letterSpacing: .3 }}
+        style={{ width: '100%', padding: '18px 0', background: 'var(--green)', border: 'none', borderRadius: 16, color: '#fff', fontSize: 17, fontWeight: 800, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
         onClick={() => dispatch({ type: 'ADD_MOV', payload: { desc: `Domi #${domisHoy + 1}`, monto: state.precioDomi, tipo: 'ingreso' } })}
       >
         <span style={{ fontSize: 24 }}>⚡</span> Domi rápido — {fmt(state.precioDomi)}
@@ -277,13 +298,13 @@ export default function Domis() {
 
       {showResumen && (
         <ResumenDia
-          ganado={ganado}
+          ganadoHoy={ganadoHoy}
           balance={balance}
           capitalInicial={state.capitalInicial}
           gastosFijos={state.gastosFijos}
           gastadoHoy={gastadoHoy}
+          deudas={state.deudas}
           onClose={() => {
-            // Al cerrar el día, actualizar el capital al valor actual en mano
             const capitalNuevo = state.capitalInicial + balance
             dispatch({ type: 'UPDATE_CONFIG', payload: { capitalInicial: capitalNuevo } })
             setShowResumen(false)

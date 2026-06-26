@@ -289,6 +289,7 @@ export default function Finanzas() {
   const [fijoIcono, setFijoIcono] = useState('💰')
   const [diaDetalle, setDiaDetalle] = useState(null)
   const [showWrapped, setShowWrapped] = useState(false)
+  const [showReset, setShowReset] = useState(false)
 
   const generarPDF = () => {
     const mes = new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
@@ -366,14 +367,12 @@ export default function Finanzas() {
   const gastosTotales = {
     gas: (gMes.gas || 0) + (g.gas || 0),
     comida: (gMes.comida || 0) + (g.comida || 0),
-    datos: (gMes.datos || 0) + (g.datos || 0),
-    otros: (gMes.otros || 0) + (g.otros || 0),
+    otros: (gMes.otros || 0) + (g.otros || 0) + (gMes.datos || 0) + (g.datos || 0),
   }
 
   const donutData = [
     { val: gastosTotales.gas, color: '#534AB7' },
     { val: gastosTotales.comida, color: '#2ea86a' },
-    { val: gastosTotales.datos, color: '#c07c10' },
     { val: gastosTotales.otros, color: '#bbb' },
   ]
 
@@ -442,14 +441,37 @@ export default function Finanzas() {
           </div>
         ))}
         <div className="divider" />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>Total comprometido</span>
-          <span style={{ fontWeight: 800, color: 'var(--red)' }}>{fmt(totalGastosFijos)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>Disponible real</span>
-          <span style={{ fontWeight: 800, color: disponible >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(disponible)}</span>
-        </div>
+        {/* Punto 7: cuánto sacar hoy para cubrir gastos fijos */}
+        {(() => {
+          const hoy = new Date()
+          const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+          const sacarHoy = Math.round(totalGastosFijos / diasMes)
+          const yaApartado = Math.round((state.gastosFijosApartado || 0))
+          const faltaApartar = Math.max(0, totalGastosFijos - yaApartado)
+          return (
+            <div style={{ background: '#eaf3de', borderRadius: 12, padding: 11, marginTop: 2 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#27500A', marginBottom: 6 }}>
+                🏠 Gastos fijos — cómo cubrirlos cada día
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
+                <span>Total mes (arriendo + moto)</span>
+                <span style={{ color: 'var(--red)', fontWeight: 700 }}>{fmt(totalGastosFijos)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
+                <span>Lo que debes apartar hoy</span>
+                <span style={{ color: 'var(--green)', fontWeight: 800 }}>{fmt(sacarHoy)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
+                <span>Falta juntar este mes</span>
+                <span style={{ color: faltaApartar > 0 ? 'var(--amber)' : 'var(--green)', fontWeight: 800 }}>{fmt(faltaApartar)}</span>
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%', fontSize: 11 }}
+                onClick={() => dispatch({ type: 'UPDATE_CONFIG', payload: { gastosFijosApartado: (state.gastosFijosApartado || 0) + sacarHoy } })}>
+                ✅ Aparté {fmt(sacarHoy)} hoy
+              </button>
+            </div>
+          )
+        })()}
       </div>
 
       {/* División */}
@@ -502,7 +524,7 @@ export default function Finanzas() {
         <div className="donut-wrap">
           <DonutChart data={donutData} />
           <div className="donut-legend">
-            {[['#534AB7','Gasolina',gastosTotales.gas],['#2ea86a','Comida',gastosTotales.comida],['#c07c10','Datos/Plan',gastosTotales.datos],['#bbb','Otros',gastosTotales.otros]].map(([c,l,v]) => (
+            {[['#534AB7','Gasolina',gastosTotales.gas],['#2ea86a','Comida',gastosTotales.comida],['#bbb','Otros',gastosTotales.otros]].map(([c,l,v]) => (
               <div className="legend-row" key={l}>
                 <div className="legend-dot" style={{ background: c }} />
                 <span style={{ flex: 1 }}>{l}</span>
@@ -558,9 +580,35 @@ export default function Finanzas() {
       {/* Calendario con detalle */}
       <Calendario onVerDia={setDiaDetalle} />
 
+      {/* Botón resetear mes */}
+      <div style={{ marginTop: 4, marginBottom: 20 }}>
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 8 }}>
+          ¿Quieres empezar el mes desde hoy ({new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })})?
+        </div>
+        <button className="btn btn-ghost btn-full" onClick={() => setShowReset(true)}>
+          🔄 Reiniciar mes desde hoy
+        </button>
+      </div>
+
       {/* Modales */}
       {diaDetalle && <DetalleDia dia={diaDetalle} onClose={() => setDiaDetalle(null)} />}
       {showWrapped && <WrappedMes state={state} ganado={ganado} gastadoMesTotal={gastadoMesTotal} onClose={() => setShowWrapped(false)} />}
+
+      {showReset && (
+        <div className="modal-overlay" onClick={() => setShowReset(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', fontSize: 28, marginBottom: 8 }}>🔄</div>
+            <div className="modal-title" style={{ textAlign: 'center' }}>Reiniciar mes desde hoy</div>
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.5 }}>
+              Todo empieza desde hoy <strong>{new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</strong>. Los días restantes y domis necesarios se calculan desde esta fecha hasta el mismo día del próximo mes. Las metas y deudas se quedan.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost btn-full" onClick={() => setShowReset(false)}>Cancelar</button>
+              <button className="btn btn-red btn-full" onClick={() => { dispatch({ type: 'RESET_MES' }); setShowReset(false) }}>Sí, reiniciar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddFijo && (
         <div className="modal-overlay" onClick={() => setShowAddFijo(false)}>
