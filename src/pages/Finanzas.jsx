@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
+import MoneyInput from '../components/MoneyInput.jsx'
 
 function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CO') }
 
@@ -282,7 +283,7 @@ function Calendario({ onVerDia }) {
 }
 
 export default function Finanzas() {
-  const { state, dispatch, ganado, ganadoHoy, gastadoHoy, gastadoMesTotal, totalGastosFijos } = useApp()
+  const { state, dispatch, ganado, ganadoHoy, gastadoHoy, gastadoMesTotal, totalGastosFijos, diaActualPeriodo, diasTotalesPeriodo, diasRestantes } = useApp()
   const [showAddFijo, setShowAddFijo] = useState(false)
   const [fijoNombre, setFijoNombre] = useState('')
   const [fijoMonto, setFijoMonto] = useState('')
@@ -377,13 +378,13 @@ export default function Finanzas() {
   ]
 
   const hoy = new Date()
-  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
-  const diaActual = hoy.getDate()
-  const ritmo = diaActual > 0 ? (ganado / diaActual) * diasMes : 0
+  // Bug 7 fix: usar período real (desde fecha de reset) no días del mes calendario
+  const ritmo = diaActualPeriodo > 0 ? (ganado / diaActualPeriodo) * diasTotalesPeriodo : 0
   const pctProj = Math.min(100, (ritmo / state.metaMensual) * 100)
-  const esUltimoDia = diaActual === diasMes
+  const esUltimoDia = diasRestantes <= 1
 
   const maxSem = Math.max(...state.semActual, ...state.semAnterior, 1)
+  const semGastos = state.semGastosActual || [0,0,0,0,0,0,0]
   const diasSem = ['L','M','X','J','V','S','D']
   const disponible = ganado - gastadoMesTotal - totalGastosFijos
 
@@ -424,54 +425,134 @@ export default function Finanzas() {
         </div>
       </div>
 
-      {/* Gastos fijos */}
-      <div className="card">
+      {/* Gastos fijos — nueva versión con barras individuales */}
+      <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div className="card-title" style={{ marginBottom: 0 }}>Gastos fijos mensuales</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>Gastos fijos mensuales</div>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowAddFijo(true)}>+ Agregar</button>
         </div>
-        {state.gastosFijos.map(g => (
-          <div key={g.id} className="fijo-item">
-            <div className="li-left"><span className="li-icon">{g.icono}</span>{g.nombre}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--red)' }}>{fmt(g.monto)}</span>
-              <button style={{ border: 'none', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, width: 26, height: 26, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}
-                onClick={() => dispatch({ type: 'REMOVE_GASTO_FIJO', payload: g.id })}>×</button>
-            </div>
-          </div>
-        ))}
-        <div className="divider" />
-        {/* Punto 7: cuánto sacar hoy para cubrir gastos fijos */}
-        {(() => {
-          const hoy = new Date()
-          const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
-          const sacarHoy = Math.round(totalGastosFijos / diasMes)
-          const yaApartado = Math.round((state.gastosFijosApartado || 0))
-          const faltaApartar = Math.max(0, totalGastosFijos - yaApartado)
+
+        {state.gastosFijos.map(g => {
+          const apartado = g.apartado || 0
+          const pct = Math.min(100, Math.round((apartado / g.monto) * 100))
+          const juntado = apartado >= g.monto
+          const porDiaCubrir = Math.round(g.monto / diasTotalesPeriodo)
+          const [showAbonar, setShowAbonar] = useState(false)
+          const [abonoVal, setAbonoVal] = useState('')
+          const [editarPago, setEditarPago] = useState(false)
+          const [editVal, setEditVal] = useState('')
+
           return (
-            <div style={{ background: '#eaf3de', borderRadius: 12, padding: 11, marginTop: 2 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#27500A', marginBottom: 6 }}>
-                🏠 Gastos fijos — cómo cubrirlos cada día
+            <div key={g.id} className="card" style={{ marginBottom: 10, border: juntado ? '1.5px solid var(--green)' : '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontSize: 18 }}>{g.icono}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{g.nombre}</span>
+                  {juntado && <span className="tag tag-green" style={{ fontSize: 10 }}>✅ Juntado!</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  <button style={{ border: 'none', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, width: 24, height: 24, cursor: 'pointer', fontWeight: 800, fontSize: 13 }}
+                    onClick={() => dispatch({ type: 'REMOVE_GASTO_FIJO', payload: g.id })}>×</button>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
-                <span>Total mes (arriendo + moto)</span>
-                <span style={{ color: 'var(--red)', fontWeight: 700 }}>{fmt(totalGastosFijos)}</span>
+
+              {/* Montos */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>
+                <span>Juntado: <span style={{ color: juntado ? 'var(--green)' : 'var(--purple)', fontWeight: 700 }}>{fmt(apartado)}</span></span>
+                <span>Meta: <span style={{ color: 'var(--red)', fontWeight: 700 }}>{fmt(g.monto)}</span></span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
-                <span>Lo que debes apartar hoy</span>
-                <span style={{ color: 'var(--green)', fontWeight: 800 }}>{fmt(sacarHoy)}</span>
+
+              {/* Barra de progreso */}
+              <div className="progress-wrap" style={{ marginTop: 0, marginBottom: 8 }}>
+                <div className="pb" style={{ width: pct + '%', background: juntado ? 'var(--green)' : 'var(--purple)' }} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
-                <span>Falta juntar este mes</span>
-                <span style={{ color: faltaApartar > 0 ? 'var(--amber)' : 'var(--green)', fontWeight: 800 }}>{fmt(faltaApartar)}</span>
+
+              {/* Info diaria */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 8 }}>
+                <span>Apartar por día: <strong style={{ color: 'var(--text)' }}>{fmt(porDiaCubrir)}</strong></span>
+                <span>{pct}% completado</span>
               </div>
-              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%', fontSize: 11 }}
-                onClick={() => dispatch({ type: 'UPDATE_CONFIG', payload: { gastosFijosApartado: (state.gastosFijosApartado || 0) + sacarHoy } })}>
-                ✅ Aparté {fmt(sacarHoy)} hoy
-              </button>
+
+              {/* Botones */}
+              {!juntado && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }}
+                    onClick={() => { setShowAbonar(true); setAbonoVal(String(porDiaCubrir)) }}>
+                    + Abonar
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => { setEditarPago(true); setEditVal(String(apartado)) }}>
+                    Editar pago
+                  </button>
+                </div>
+              )}
+              {juntado && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                    onClick={() => dispatch({ type: 'EDITAR_APARTADO_GASTO_FIJO', payload: { id: g.id, apartado: 0 } })}>
+                    🔄 Reiniciar
+                  </button>
+                </div>
+              )}
+
+              {/* Modal abonar */}
+              {showAbonar && (
+                <div className="modal-overlay" onClick={() => setShowAbonar(false)}>
+                  <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-title">Abonar a {g.nombre}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10, fontWeight: 600 }}>
+                      Falta juntar: {fmt(g.monto - apartado)} · Este pago se descuenta de tu capital
+                    </div>
+                    <MoneyInput value={abonoVal} onChange={setAbonoVal} placeholder="Cuánto vas a abonar" style={{ marginBottom: 12 }} autoFocus />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost btn-full" onClick={() => setShowAbonar(false)}>Cancelar</button>
+                      <button className="btn btn-primary btn-full" onClick={() => {
+                        const v = parseFloat(abonoVal)
+                        if (!isNaN(v) && v > 0) dispatch({ type: 'ABONAR_GASTO_FIJO', payload: { id: g.id, monto: v } })
+                        setShowAbonar(false); setAbonoVal('')
+                      }}>Guardar y descontar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal editar pago */}
+              {editarPago && (
+                <div className="modal-overlay" onClick={() => setEditarPago(false)}>
+                  <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-title">Editar monto juntado — {g.nombre}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10, fontWeight: 600 }}>
+                      Si te equivocaste en el pago, corrígelo aquí
+                    </div>
+                    <MoneyInput value={editVal} onChange={setEditVal} placeholder="Monto correcto" style={{ marginBottom: 12 }} autoFocus />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost btn-full" onClick={() => setEditarPago(false)}>Cancelar</button>
+                      <button className="btn btn-primary btn-full" onClick={() => {
+                        const v = parseFloat(editVal)
+                        if (!isNaN(v) && v >= 0) dispatch({ type: 'EDITAR_APARTADO_GASTO_FIJO', payload: { id: g.id, apartado: v } })
+                        setEditarPago(false); setEditVal('')
+                      }}>Guardar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )
-        })()}
+        })}
+
+        {/* Total */}
+        {state.gastosFijos.length > 0 && (
+          <div className="card" style={{ background: '#f5f5f7', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Total gastos fijos mes</span>
+              <span style={{ fontWeight: 800, color: 'var(--red)', fontSize: 15 }}>{fmt(totalGastosFijos)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>Total juntado</span>
+              <span style={{ fontWeight: 800, color: 'var(--green)' }}>{fmt(state.gastosFijos.reduce((a, g) => a + (g.apartado || 0), 0))}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* División */}
@@ -493,13 +574,14 @@ export default function Finanzas() {
         </div>
         <div className="week-compare">
           {diasSem.map((d, i) => {
-            const h1 = Math.max(3, Math.round((state.semActual[i] / maxSem) * 44))
-            const h2 = Math.max(3, Math.round((state.semAnterior[i] / maxSem) * 44))
+            const maxVal = Math.max(...state.semActual, ...semGastos, 1)
+            const hIngreso = Math.max(3, Math.round((state.semActual[i] / maxVal) * 44))
+            const hGasto = Math.max(3, Math.round(((semGastos[i] || 0) / maxVal) * 44))
             return (
               <div className="wc-col" key={d}>
                 <div className="wc-bars">
-                  <div className="wc-bar" style={{ height: h2, background: '#CECBF6' }} />
-                  <div className="wc-bar" style={{ height: h1, background: 'var(--purple)' }} />
+                  <div className="wc-bar" style={{ height: hIngreso, background: 'var(--purple)' }} />
+                  <div className="wc-bar" style={{ height: hGasto, background: 'var(--red-light)', border: '1px solid var(--red)' }} />
                 </div>
                 <div className="wc-label">{d}</div>
               </div>
@@ -507,7 +589,7 @@ export default function Finanzas() {
           })}
         </div>
         <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-          {[['var(--purple)','Esta semana',state.semActual.reduce((a,b)=>a+b,0)],['#CECBF6','Semana anterior',state.semAnterior.reduce((a,b)=>a+b,0)]].map(([c,l,v]) => (
+          {[['var(--purple)','Ingresos',state.semActual.reduce((a,b)=>a+b,0)],['var(--red)','Gastos',semGastos.reduce((a,b)=>a+b,0)]].map(([c,l,v]) => (
             <div key={l}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />{l}
@@ -553,14 +635,14 @@ export default function Finanzas() {
       <div className="card">
         <div className="card-title">📊 Informe del mes — {new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}</div>
         {[
-          ['Días transcurridos', `${diaActual} de ${diasMes}`, 'var(--purple)'],
+          ['Días del período', `${diaActualPeriodo} de ${diasTotalesPeriodo}`, 'var(--purple)'],
           ['Total ganado', fmt(ganado), 'var(--green)'],
           ['Total gastado', fmt(gastadoMesTotal), 'var(--red)'],
           ['Gastos fijos mes', fmt(totalGastosFijos), 'var(--red)'],
-          ['Promedio diario', fmt(diaActual > 0 ? ganado / diaActual : 0), 'var(--purple)'],
-          ['Proyección fin de mes', fmt(ritmo), ritmo >= state.metaMensual ? 'var(--green)' : 'var(--amber)'],
+          ['Promedio diario', fmt(diaActualPeriodo > 0 ? ganado / diaActualPeriodo : 0), 'var(--purple)'],
+          ['Proyección fin de período', fmt(ritmo), ritmo >= state.metaMensual ? 'var(--green)' : 'var(--amber)'],
           ['Para ahorrar (40%)', fmt(ganado * 0.4), 'var(--purple)'],
-          ['Neto disponible', fmt(Math.max(0, ganado - gastadoMesTotal - totalGastosFijos)), disponible >= 0 ? 'var(--green)' : 'var(--red)'],
+          ['Neto disponible', fmt(Math.max(0, ganado - gastadoMesTotal - totalGastosFijos)), ganado - gastadoMesTotal - totalGastosFijos >= 0 ? 'var(--green)' : 'var(--red)'],
         ].map(([l, v, c]) => (
           <div className="list-item" key={l}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
@@ -623,7 +705,7 @@ export default function Finanzas() {
               ))}
             </div>
             <input className="inp" style={{ marginBottom: 8 }} value={fijoNombre} onChange={e => setFijoNombre(e.target.value)} placeholder="Nombre (ej: Arriendo)" />
-            <input className="inp" style={{ marginBottom: 12 }} type="number" value={fijoMonto} onChange={e => setFijoMonto(e.target.value)} placeholder="Monto mensual" />
+            <MoneyInput value={fijoMonto} onChange={setFijoMonto} placeholder="Monto mensual" style={{ marginBottom: 12 }} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost btn-full" onClick={() => setShowAddFijo(false)}>Cancelar</button>
               <button className="btn btn-primary btn-full" onClick={agregarFijo}>Guardar</button>

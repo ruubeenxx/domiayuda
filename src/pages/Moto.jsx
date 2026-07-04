@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
+import MoneyInput from '../components/MoneyInput.jsx'
 
 function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CO') }
 
 export default function Moto() {
   const { state, dispatch } = useApp()
   const [kmInput, setKmInput] = useState('')
+  const [kmError, setKmError] = useState('')
   const [mantTipo, setMantTipo] = useState('')
   const [mantKm, setMantKm] = useState('')
   const [mantFecha, setMantFecha] = useState('')
@@ -18,6 +20,12 @@ export default function Moto() {
   const actualizarKm = () => {
     const km = parseFloat(kmInput)
     if (isNaN(km)) return
+    // Bug 5 fix: no permitir km menor al actual
+    if (km < moto.km) {
+      setKmError(`Debe ser mayor al km actual (${Math.round(moto.km).toLocaleString('es-CO')} km)`)
+      return
+    }
+    setKmError('')
     dispatch({ type: 'UPDATE_MOTO', payload: { km } })
     setKmInput('')
   }
@@ -54,7 +62,8 @@ export default function Moto() {
           {Math.round(moto.km).toLocaleString('es-CO')} km
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input className="inp" type="number" value={kmInput} onChange={e => setKmInput(e.target.value)} placeholder="Nuevo km" />
+          <input className="inp" type="number" value={kmInput} onChange={e => { setKmInput(e.target.value); setKmError('') }} placeholder="Nuevo km" />
+          {kmError && <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginTop: 4 }}>⚠️ {kmError}</div>}
           <button className="btn btn-primary" onClick={actualizarKm}>Guardar</button>
         </div>
       </div>
@@ -99,7 +108,7 @@ export default function Moto() {
         </select>
         <input className="inp" style={{ marginBottom: 8 }} type="number" value={mantKm} onChange={e => setMantKm(e.target.value)} placeholder="Km actual (para aceite)" />
         <input className="inp" style={{ marginBottom: 8 }} value={mantFecha} onChange={e => setMantFecha(e.target.value)} placeholder="Fecha vencimiento (ej: 20/05/2027)" />
-        <input className="inp" style={{ marginBottom: 10 }} type="number" value={mantCosto} onChange={e => setMantCosto(e.target.value)} placeholder="Costo del mantenimiento" />
+        <MoneyInput value={mantCosto} onChange={setMantCosto} placeholder="Costo del mantenimiento" style={{ marginBottom: 10 }} />
         <button className="btn btn-primary btn-full" onClick={registrarMant}>Registrar</button>
       </div>
 

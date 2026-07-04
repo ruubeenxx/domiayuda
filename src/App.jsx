@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { AppProvider } from './context/AppContext.jsx'
+import { useState, useEffect } from 'react'
+import { AppProvider, useApp } from './context/AppContext.jsx'
 import Inicio from './pages/Inicio.jsx'
 import Domis from './pages/Domis.jsx'
 import Finanzas from './pages/Finanzas.jsx'
 import Metas from './pages/Metas.jsx'
 import Moto from './pages/Moto.jsx'
+import MoneyInput from './components/MoneyInput.jsx'
 
 const tabs = [
   { id: 'inicio', label: 'Inicio', icon: () => (
@@ -26,22 +27,185 @@ const tabs = [
 
 const pages = { inicio: Inicio, domis: Domis, finanzas: Finanzas, metas: Metas, moto: Moto }
 
-export default function App() {
-  const [tab, setTab] = useState('inicio')
-  const Page = pages[tab]
+// Pantalla de bienvenida para usuarios nuevos
+function Bienvenida({ onEntrar }) {
+  const [nombre, setNombre] = useState('')
+  const [meta, setMeta] = useState('2000000')
+  const [precio, setPrecio] = useState('4000')
+  const [capital, setCapital] = useState('20000')
+  const [paso, setPaso] = useState(1)
+
+  const fmt = n => '$' + Math.round(n).toLocaleString('es-CO')
+
+  const continuar = () => {
+    if (paso === 1 && nombre.trim()) setPaso(2)
+    else if (paso === 2) {
+      onEntrar({
+        nombre: nombre.trim(),
+        metaMensual: parseFloat(meta) || 2000000,
+        precioDomi: parseFloat(precio) || 4000,
+        capitalInicial: parseFloat(capital) || 20000,
+      })
+    }
+  }
 
   return (
-    <AppProvider>
-      <div className="app">
-        <div className="screen"><Page /></div>
-        <nav className="navbar">
-          {tabs.map(t => (
-            <button key={t.id} className={`nav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-              {t.icon()}<span>{t.label}</span>
+    <div style={{ minHeight: '100vh', background: '#f5f5f7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+
+        {/* Logo / header */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 56, marginBottom: 8 }}>🛵</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--purple)' }}>DomiAyuda</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 600, marginTop: 4 }}>Tu app de domicilios y finanzas</div>
+        </div>
+
+        {/* Paso 1 — nombre */}
+        {paso === 1 && (
+          <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Hola! Cómo te llamas?</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 16 }}>
+              Tu nombre aparecerá en la pantalla principal
+            </div>
+            <input
+              className="inp"
+              style={{ marginBottom: 16, fontSize: 15 }}
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              placeholder="Tu nombre"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && continuar()}
+            />
+            <button
+              className="btn btn-primary btn-full"
+              onClick={continuar}
+              disabled={!nombre.trim()}
+              style={{ opacity: nombre.trim() ? 1 : 0.5 }}
+            >
+              Continuar →
             </button>
-          ))}
-        </nav>
+          </div>
+        )}
+
+        {/* Paso 2 — configuración */}
+        {paso === 2 && (
+          <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Perfecto, {nombre}!</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 20 }}>
+              Configura tus datos para empezar. Puedes cambiarlos después.
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Meta mensual</div>
+            <MoneyInput value={meta} onChange={setMeta} placeholder="Ej: 2.000.000" style={{ marginBottom: 12 }} />
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Precio por domicilio</div>
+            <MoneyInput value={precio} onChange={setPrecio} placeholder="Ej: 4.000" style={{ marginBottom: 12 }} />
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Capital con el que sales cada día</div>
+            <MoneyInput value={capital} onChange={setCapital} placeholder="Ej: 20.000" style={{ marginBottom: 16 }} />
+
+            {/* Preview */}
+            <div style={{ background: 'var(--purple-light)', borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 12, fontWeight: 600, color: 'var(--purple)' }}>
+              Para llegar a {fmt(parseFloat(meta)||0)} en 30 días necesitas {Math.ceil((parseFloat(meta)||0) / 30 / (parseFloat(precio)||1))} domis por día
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost btn-full" onClick={() => setPaso(1)}>← Atrás</button>
+              <button className="btn btn-primary btn-full" onClick={continuar}>Empezar! 🚀</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', marginTop: 20, fontWeight: 600 }}>
+          Tus datos se guardan solo en tu celular
+        </div>
       </div>
+    </div>
+  )
+}
+
+function Ajustes({ onCerrar }) {
+  const { state, dispatch } = useApp()
+  const [nombre, setNombre] = useState(state.nombre)
+  const [meta, setMeta] = useState(state.metaMensual)
+  const [precio, setPrecio] = useState(state.precioDomi)
+  const [guardado, setGuardado] = useState(false)
+
+  const guardar = () => {
+    const m = parseFloat(meta), p = parseFloat(precio)
+    if (!nombre.trim() || isNaN(m) || isNaN(p)) return
+    dispatch({ type: 'UPDATE_CONFIG', payload: { nombre: nombre.trim(), metaMensual: m, precioDomi: p } })
+    setGuardado(true)
+    setTimeout(() => { setGuardado(false); onCerrar() }, 1200)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onCerrar}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-title">⚙️ Ajustes</div>
+        {guardado && (
+          <div className="banner banner-green" style={{ marginBottom: 12 }}>
+            <span className="banner-icon">✅</span>
+            <span className="banner-text">Guardado!</span>
+          </div>
+        )}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Tu nombre</div>
+        <input className="inp" style={{ marginBottom: 12 }} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Meta mensual</div>
+        <input className="inp" style={{ marginBottom: 12 }} type="number" value={meta} onChange={e => setMeta(e.target.value)} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 5 }}>Precio por domicilio</div>
+        <input className="inp" style={{ marginBottom: 16 }} type="number" value={precio} onChange={e => setPrecio(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost btn-full" onClick={onCerrar}>Cancelar</button>
+          <button className="btn btn-primary btn-full" onClick={guardar}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AppInner() {
+  const { state, dispatch } = useApp()
+  const [tab, setTab] = useState('inicio')
+  const [showAjustes, setShowAjustes] = useState(false)
+  const Page = pages[tab]
+
+  const esNuevo = !localStorage.getItem('domiayuda_configurado') && !localStorage.getItem('domiayuda_state')
+
+  const handleEntrar = (config) => {
+    dispatch({ type: 'UPDATE_CONFIG', payload: config })
+    localStorage.setItem('domiayuda_configurado', 'si')
+  }
+
+  if (esNuevo) return <Bienvenida onEntrar={handleEntrar} />
+
+  return (
+    <div className="app">
+      {/* Header con botón ajustes */}
+      <div style={{ background: '#fff', padding: '10px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid var(--border)' }}>
+        <span style={{ color: 'var(--purple)', fontWeight: 800, fontSize: 15 }}>🛵 DomiAyuda</span>
+        <button onClick={() => setShowAjustes(true)}
+          style={{ border: 'none', background: 'var(--purple-light)', borderRadius: 20, padding: '5px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>
+          ⚙️ Ajustes
+        </button>
+      </div>
+      <div className="screen"><Page /></div>
+      <nav className="navbar">
+        {tabs.map(t => (
+          <button key={t.id} className={`nav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+            {t.icon()}<span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
+      {showAjustes && <Ajustes onCerrar={() => setShowAjustes(false)} />}
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppInner />
     </AppProvider>
   )
 }

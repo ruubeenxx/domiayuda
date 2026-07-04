@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
+import MoneyInput from '../components/MoneyInput.jsx'
+import Modal from '../components/Modal.jsx'
 
 function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CO') }
 
@@ -93,8 +95,9 @@ function FormDeuda({ inicial, onGuardar, onCancelar }) {
         ))}
       </div>
 
-      <input className="inp" style={{ marginBottom: 8 }} type="number" value={cuota} onChange={e => setCuota(e.target.value)}
-        placeholder={`Valor cuota ${frecuencia === 'diaria' ? 'diaria' : frecuencia === 'semanal' ? 'semanal' : frecuencia === 'quincenal' ? 'quincenal' : 'mensual'}`} />
+      <MoneyInput value={cuota} onChange={setCuota}
+        placeholder={`Valor cuota ${frecuencia === 'diaria' ? 'diaria' : frecuencia === 'semanal' ? 'semanal' : frecuencia === 'quincenal' ? 'quincenal' : 'mensual'}`}
+        style={{ marginBottom: 8 }} />
 
       <input className="inp" style={{ marginBottom: 8 }} type="number" value={totalCuotas} onChange={e => setTotalCuotas(e.target.value)}
         placeholder={`# cuotas total (ej: ${frecuencia === 'diaria' ? '30' : frecuencia === 'semanal' ? '4' : frecuencia === 'quincenal' ? '6' : '12'})`} />
@@ -331,83 +334,68 @@ export default function Metas() {
 
       {/* Modal nueva meta */}
       {showMeta && (
-        <div className="modal-overlay" onClick={() => setShowMeta(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">Nueva meta de ahorro</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-              {['🎯','🏍️','📱','✈️','🏠','💻','👟','🎮'].map(e => (
-                <button key={e} onClick={() => setMetaIcono(e)}
-                  style={{ fontSize: 20, background: metaIcono === e ? 'var(--purple-light)' : 'transparent', border: '1px solid', borderColor: metaIcono === e ? 'var(--purple)' : 'transparent', borderRadius: 8, padding: 4, cursor: 'pointer' }}>{e}</button>
-              ))}
-            </div>
-            <input className="inp" style={{ marginBottom: 8 }} value={metaNombre} onChange={e => setMetaNombre(e.target.value)} placeholder="¿Para qué estás ahorrando?" />
-            <input className="inp" style={{ marginBottom: 12 }} type="number" value={metaTotal} onChange={e => setMetaTotal(e.target.value)} placeholder="¿Cuánto necesitas?" />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-full" onClick={() => setShowMeta(false)}>Cancelar</button>
-              <button className="btn btn-primary btn-full" onClick={agregarMeta}>Guardar</button>
-            </div>
+        <Modal onClose={() => setShowMeta(false)} title="Nueva meta de ahorro">
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            {['🎯','🏍️','📱','✈️','🏠','💻','👟','🎮'].map(e => (
+              <button key={e} onClick={() => setMetaIcono(e)}
+                style={{ fontSize: 20, background: metaIcono === e ? 'var(--purple-light)' : 'transparent', border: '1px solid', borderColor: metaIcono === e ? 'var(--purple)' : 'transparent', borderRadius: 8, padding: 4, cursor: 'pointer' }}>{e}</button>
+            ))}
           </div>
-        </div>
+          <input className="inp" style={{ marginBottom: 8 }} value={metaNombre} onChange={e => setMetaNombre(e.target.value)} placeholder="¿Para qué estás ahorrando?" autoFocus />
+          <MoneyInput value={metaTotal} onChange={setMetaTotal} placeholder="¿Cuánto necesitas?" style={{ marginBottom: 12 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-full" onClick={() => setShowMeta(false)}>Cancelar</button>
+            <button className="btn btn-primary btn-full" onClick={agregarMeta}>Guardar</button>
+          </div>
+        </Modal>
       )}
 
       {/* Modal nueva deuda */}
       {showDeuda && (
-        <div className="modal-overlay" onClick={() => setShowDeuda(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="modal-title">Agregar deuda</div>
-            <FormDeuda
-              onGuardar={(data) => { dispatch({ type: 'ADD_DEUDA', payload: { ...data, id: Date.now() } }); setShowDeuda(false) }}
-              onCancelar={() => setShowDeuda(false)}
-            />
-          </div>
-        </div>
+        <Modal onClose={() => setShowDeuda(false)} title="Agregar deuda">
+          <FormDeuda
+            onGuardar={(data) => { dispatch({ type: 'ADD_DEUDA', payload: { ...data, id: Date.now() } }); setShowDeuda(false) }}
+            onCancelar={() => setShowDeuda(false)}
+          />
+        </Modal>
       )}
 
       {/* Modal editar deuda */}
       {editandoDeuda && (
-        <div className="modal-overlay" onClick={() => setEditandoDeuda(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="modal-title">Editar deuda</div>
-            <FormDeuda
-              inicial={editandoDeuda}
-              onGuardar={(data) => {
-                dispatch({ type: 'EDITAR_DEUDA', payload: { id: editandoDeuda.id, ...data } })
-                setEditandoDeuda(null)
-              }}
-              onCancelar={() => setEditandoDeuda(null)}
-            />
-          </div>
-        </div>
+        <Modal onClose={() => setEditandoDeuda(null)} title="Editar deuda">
+          <FormDeuda
+            inicial={editandoDeuda}
+            onGuardar={(data) => {
+              dispatch({ type: 'EDITAR_DEUDA', payload: { id: editandoDeuda.id, ...data } })
+              setEditandoDeuda(null)
+            }}
+            onCancelar={() => setEditandoDeuda(null)}
+          />
+        </Modal>
       )}
 
       {/* Modal abonar */}
       {showAbonar && (
-        <div className="modal-overlay" onClick={() => setShowAbonar(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">Abonar a meta</div>
-            <input className="inp" style={{ marginBottom: 12 }} type="number" value={abonoVal} onChange={e => setAbonoVal(e.target.value)} placeholder="¿Cuánto vas a abonar?" />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-full" onClick={() => setShowAbonar(null)}>Cancelar</button>
-              <button className="btn btn-green btn-full" onClick={abonar}>Abonar</button>
-            </div>
+        <Modal onClose={() => setShowAbonar(null)} title="Abonar a meta">
+          <MoneyInput value={abonoVal} onChange={setAbonoVal} placeholder="¿Cuánto vas a abonar?" style={{ marginBottom: 12 }} autoFocus />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-full" onClick={() => setShowAbonar(null)}>Cancelar</button>
+            <button className="btn btn-green btn-full" onClick={abonar}>Abonar</button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal reset mes */}
       {showReset && (
-        <div className="modal-overlay" onClick={() => setShowReset(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">⚠️ Resetear inicio de mes</div>
-            <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.5 }}>
-              Esto borra los totales del mes anterior y empieza desde cero. Las metas, deudas y configuración se quedan.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-full" onClick={() => setShowReset(false)}>Cancelar</button>
-              <button className="btn btn-red btn-full" onClick={resetearMes}>Sí, resetear</button>
-            </div>
+        <Modal onClose={() => setShowReset(false)} title="⚠️ Resetear inicio de mes">
+          <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.5 }}>
+            Esto borra los totales del mes anterior y empieza desde cero. Las metas, deudas y configuración se quedan.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-full" onClick={() => setShowReset(false)}>Cancelar</button>
+            <button className="btn btn-red btn-full" onClick={resetearMes}>Sí, resetear</button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
