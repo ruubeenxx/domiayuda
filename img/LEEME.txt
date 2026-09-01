@@ -1,0 +1,7 @@
+Pon aquí tus dos íconos con estos nombres exactos:
+
+icon-192.png   (192x192 px)
+icon-512.png   (512x512 px)
+
+Sin esos dos archivos, la app no se va a poder instalar en el celular.
+Puedes borrar este archivo LEEME.txt después de poner tus íconos.
